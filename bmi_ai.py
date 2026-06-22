@@ -1,285 +1,124 @@
 import streamlit as st
+import plotly.graph_objects as go
+import pandas as pd
+import random
 
-# -------------------------------------------------------
-# PAGE CONFIGURATION
-# -------------------------------------------------------
-
-st.set_page_config(
-    page_title="FitSense AI",
-    page_icon="🏋️",
-    layout="wide"
-)
-
-# -------------------------------------------------------
-# TITLE
-# -------------------------------------------------------
+st.set_page_config(page_title="FitSense AI v1.2", page_icon="🏋️", layout="wide")
 
 st.title("🏋️ FitSense AI")
-st.caption("Your Personal Health Companion")
-
-st.write(
-    "Calculate your BMI, estimate your daily calorie needs, "
-    "and receive personalized health recommendations."
-)
-
-# -------------------------------------------------------
-# SIDEBAR
-# -------------------------------------------------------
+st.caption("Version 1.2 • Professional Dashboard")
 
 st.sidebar.header("👤 Enter Your Details")
+name=st.sidebar.text_input("Name")
+age=st.sidebar.number_input("Age",1,120,21)
+gender=st.sidebar.selectbox("Gender",["Male","Female"])
+height=st.sidebar.number_input("Height (m)",0.5,2.5,1.70)
+weight=st.sidebar.number_input("Weight (kg)",10.0,250.0,70.0)
+activity=st.sidebar.selectbox("Activity",["Sedentary","Lightly Active","Moderately Active","Very Active","Extremely Active"])
+goal=st.sidebar.selectbox("Goal",["Lose Weight","Maintain Weight","Gain Muscle"])
 
-name = st.sidebar.text_input("Name")
-
-age = st.sidebar.number_input(
-    "Age",
-    min_value=1,
-    max_value=120,
-    value=21
-)
-
-gender = st.sidebar.selectbox(
-    "Gender",
-    ["Male", "Female"]
-)
-
-height = st.sidebar.number_input(
-    "Height (metres)",
-    min_value=0.50,
-    max_value=2.50,
-    value=1.70
-)
-
-weight = st.sidebar.number_input(
-    "Weight (kg)",
-    min_value=10.0,
-    max_value=250.0,
-    value=70.0
-)
-
-activity = st.sidebar.selectbox(
-    "Activity Level",
-    [
-        "Sedentary",
-        "Lightly Active",
-        "Moderately Active",
-        "Very Active",
-        "Extremely Active"
-    ]
-)
-
-goal = st.sidebar.selectbox(
-    "Fitness Goal",
-    [
-        "Lose Weight",
-        "Maintain Weight",
-        "Gain Muscle"
-    ]
-)
-
-calculate = st.sidebar.button("🚀 Calculate")
-
-# -------------------------------------------------------
-# MAIN PROGRAM
-# -------------------------------------------------------
-
-if calculate:
-
-    bmi = weight / (height ** 2)
-
-    # BMI Category
-    if bmi < 18.5:
-        category = "Underweight"
-        color = "warning"
-
-    elif bmi < 25:
-        category = "Healthy"
-        color = "success"
-
-    elif bmi < 30:
-        category = "Overweight"
-        color = "warning"
-
+if st.sidebar.button("🚀 Calculate"):
+    bmi=weight/(height**2)
+    if bmi<18.5:
+        category="Underweight"; msg=st.warning
+    elif bmi<25:
+        category="Healthy"; msg=st.success
+    elif bmi<30:
+        category="Overweight"; msg=st.warning
     else:
-        category = "Obese"
-        color = "error"
+        category="Obese"; msg=st.error
 
-    # ---------------------------------------------------
-    # BMR
-    # ---------------------------------------------------
+    hcm=height*100
+    bmr=(10*weight)+(6.25*hcm)-(5*age)+(5 if gender=="Male" else -161)
+    factors={"Sedentary":1.2,"Lightly Active":1.375,"Moderately Active":1.55,"Very Active":1.725,"Extremely Active":1.9}
+    maintenance=bmr*factors[activity]
+    target=maintenance-500 if goal=="Lose Weight" else maintenance+300 if goal=="Gain Muscle" else maintenance
+    water=weight*0.035
+    protein=weight*1.2
+    ideal_min=18.5*height**2
+    ideal_max=24.9*height**2
 
-    height_cm = height * 100
+    score=100
+    if bmi<18.5: score-=20
+    elif bmi>=25 and bmi<30: score-=15
+    elif bmi>=30: score-=30
+    if activity=="Sedentary": score-=15
+    elif activity=="Lightly Active": score-=10
+    elif activity=="Moderately Active": score-=5
+    score=max(score,0)
 
-    if gender == "Male":
-        bmr = (10 * weight) + (6.25 * height_cm) - (5 * age) + 5
-    else:
-        bmr = (10 * weight) + (6.25 * height_cm) - (5 * age) - 161
+    st.success(f"Welcome, {name}!")
 
-    # ---------------------------------------------------
-    # Activity Multipliers
-    # ---------------------------------------------------
+    c1,c2=st.columns(2)
+    with c1:
+        st.metric("BMI",f"{bmi:.2f}")
+        msg(category)
+        if category=="Healthy": st.balloons()
+        st.progress(min(bmi/40,1.0))
+        fig=go.Figure(go.Indicator(mode="gauge+number",value=bmi,title={"text":"BMI Gauge"},
+            gauge={"axis":{"range":[10,40]},
+            "steps":[
+                {"range":[10,18.5],"color":"lightblue"},
+                {"range":[18.5,25],"color":"lightgreen"},
+                {"range":[25,30],"color":"orange"},
+                {"range":[30,40],"color":"red"}]}))
+        st.plotly_chart(fig,use_container_width=True)
 
-    activity_factor = {
-        "Sedentary": 1.2,
-        "Lightly Active": 1.375,
-        "Moderately Active": 1.55,
-        "Very Active": 1.725,
-        "Extremely Active": 1.9
+    with c2:
+        st.metric("Health Score",f"{score}/100")
+        st.progress(score/100)
+        st.metric("BMR",f"{bmr:.0f} kcal")
+        st.metric("Daily Calories",f"{target:.0f} kcal")
+        st.metric("Water",f"{water:.1f} L")
+        st.metric("Protein",f"{protein:.0f} g")
+
+    st.subheader("🎯 Ideal Weight")
+    st.write(f"**{ideal_min:.1f} kg – {ideal_max:.1f} kg**")
+
+    chart=pd.DataFrame({"Metric":["Calories","Protein","Water (ml)"],
+                        "Value":[target,protein,water*1000]})
+    st.subheader("📈 Nutrition Summary")
+    st.bar_chart(chart.set_index("Metric"))
+
+    with st.expander("📚 Learn About BMI"):
+        st.markdown("""
+- **Underweight:** BMI < 18.5
+- **Healthy:** BMI 18.5–24.9
+- **Overweight:** BMI 25–29.9
+- **Obese:** BMI ≥ 30
+""")
+
+    tips={
+        "Underweight":"Increase nutritious calories and strength training.",
+        "Healthy":"Maintain your healthy lifestyle and stay active.",
+        "Overweight":"Aim for regular exercise and reduce sugary foods.",
+        "Obese":"Start with small sustainable lifestyle changes and consult a healthcare professional if needed."
     }
+    st.info("💡 "+tips[category])
 
-    maintenance = bmr * activity_factor[activity]
+    report=f"""FitSense AI Report
 
-    if goal == "Lose Weight":
-        target = maintenance - 500
-
-    elif goal == "Gain Muscle":
-        target = maintenance + 300
-
-    else:
-        target = maintenance
-
-    # ---------------------------------------------------
-    # EXTRA CALCULATIONS
-    # ---------------------------------------------------
-
-    water = weight * 0.035
-
-    protein = weight * 1.2
-
-    ideal_min = 18.5 * (height ** 2)
-
-    ideal_max = 24.9 * (height ** 2)
-
-    # ---------------------------------------------------
-    # HEADER
-    # ---------------------------------------------------
-
-    st.success(f"Welcome, {name}! 👋")
-
-    # ---------------------------------------------------
-    # TWO COLUMN LAYOUT
-    # ---------------------------------------------------
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.subheader("📊 BMI Result")
-
-        st.metric("BMI", f"{bmi:.2f}")
-
-        if color == "success":
-            st.success(f"🟢 {category}")
-            st.balloons()
-
-        elif color == "warning":
-            st.warning(f"🟠 {category}")
-
-        else:
-            st.error(f"🔴 {category}")
-
-        # BMI Progress
-
-        bmi_progress = min(bmi / 40, 1.0)
-
-        st.write("BMI Scale")
-
-        st.progress(bmi_progress)
-
-        st.write(f"Healthy BMI Range: **18.5 - 24.9**")
-
-    with col2:
-
-        st.subheader("❤️ Health Summary")
-
-        st.metric("🔥 BMR", f"{bmr:.0f} kcal/day")
-
-        st.metric(
-            "🍽 Daily Calories",
-            f"{target:.0f} kcal/day"
-        )
-
-        st.metric(
-            "💧 Water Intake",
-            f"{water:.1f} L/day"
-        )
-
-        st.metric(
-            "💪 Protein",
-            f"{protein:.0f} g/day"
-        )
-
-    st.divider()
-
-    st.subheader("🎯 Ideal Weight Range")
-
-    st.write(
-        f"Your healthy weight range is **{ideal_min:.1f} kg - {ideal_max:.1f} kg**."
-    )
-
-    st.divider()
-
-    st.subheader("💡 Health Advice")
-
-    if category == "Underweight":
-
-        st.info(
-            """
-• Eat protein-rich meals.
-
-• Include healthy fats.
-
-• Begin light strength training.
-
-• Sleep at least 8 hours.
+Name: {name}
+Age: {age}
+Gender: {gender}
+BMI: {bmi:.2f}
+Category: {category}
+BMR: {bmr:.0f}
+Daily Calories: {target:.0f}
+Water: {water:.1f} L
+Protein: {protein:.0f} g
+Ideal Weight: {ideal_min:.1f}-{ideal_max:.1f} kg
+Health Score: {score}/100
 """
-        )
+    st.download_button("📄 Download Report",report,file_name="FitSense_Report.txt")
 
-    elif category == "Healthy":
-
-        st.success(
-            """
-🎉 Excellent!
-
-Keep exercising regularly.
-
-Stay hydrated.
-
-Maintain a balanced diet.
-
-Keep up the great work!
-"""
-        )
-
-    elif category == "Overweight":
-
-        st.warning(
-            """
-• Walk at least 8,000 steps daily.
-
-• Reduce sugary foods.
-
-• Increase protein intake.
-
-• Exercise 4-5 times a week.
-"""
-        )
-
-    else:
-
-        st.error(
-            """
-• Consult a healthcare professional if needed.
-
-• Start with light physical activity.
-
-• Avoid processed foods.
-
-• Stay consistent—small changes matter.
-"""
-        )
-
-    st.divider()
-
-    st.caption(
-        "⚠ This calculator provides general wellness guidance and is not a substitute for professional medical advice."
-    )
+    quotes=[
+        "Small progress is still progress. 💪",
+        "Consistency beats intensity. 🌱",
+        "Health is your greatest investment. ❤️",
+        "Stay hydrated and keep moving! 🚶",
+        "Every healthy choice counts. ⭐"
+    ]
+    st.success(random.choice(quotes))
+else:
+    st.info("Fill in your details from the sidebar and click 'Calculate'.")
